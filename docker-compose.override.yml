@@ -1,0 +1,123 @@
+version: '3.4'
+services:
+  kafka-consumer:
+    depends_on:
+      kafka:
+        condition: service_healthy
+      #primary-ksqldb-server:
+      #  condition: service_healthy
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:${CP_VERSION}
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 32181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-enterprise-kafka:${CP_VERSION}
+    ports:
+      - "29092:29092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:32181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 100
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test:
+        ["CMD", "bash", "/bin/kafka-topics", "--list", "--zookeeper", "zookeeper:32181"]
+      interval: 30s
+      timeout: 10s
+      retries: 4
+
+  #kafka-setup:
+  #  image: confluentinc/cp-enterprise-kafka:${CP_VERSION}
+  #  depends_on:
+  #    kafka:
+  #      condition: service_healthy
+  #  command: >
+  #    bash -c "echo Waiting for Kafka to be ready... && \
+  #             bash /bin/kafka-topics --create --if-not-exists --zookeeper zookeeper:32181 --partitions 2 --replication-factor 1 --topic test-topic"
+  #  environment:
+  #    KAFKA_BROKER_ID: ignored
+  #    KAFKA_ZOOKEEPER_CONNECT: ignored
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:${CP_VERSION}
+    ports:
+      - "28081:8081"
+    depends_on:
+      - zookeeper
+      - kafka
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: zookeeper:32181
+
+  #primary-ksqldb-server:
+  #  image: ${KSQL_IMAGE_BASE}confluentinc/ksqldb-server:${KSQL_VERSION}
+  #  hostname: primary-ksqldb-server
+  #  container_name: primary-ksqldb-server
+  #  depends_on:
+  #    - kafka
+  #    - schema-registry
+  #  ports:
+  #    - "28088:8088"
+  #  environment:
+  #    KSQL_LISTENERS: http://0.0.0.0:8088
+  #    KSQL_BOOTSTRAP_SERVERS: kafka:9092
+  #    KSQL_KSQL_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+  #    KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: "true"
+  #    KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: "true"
+  #  healthcheck:
+  #    test:
+  #      ["CMD", "bash", "/bin/ksql", "--execute", "'SHOW STREAMS;'"]
+  #    interval: 30s
+  #    timeout: 10s
+  #    retries: 4
+
+  #additional-ksqldb-server:
+  #  image: ${KSQL_IMAGE_BASE}confluentinc/ksqldb-server:${KSQL_VERSION}
+  #  hostname: additional-ksqldb-server
+  #  depends_on:
+  #    - primary-ksqldb-server
+  #  ports:
+  #    - "8090"
+  #  environment:
+  #    KSQL_LISTENERS: http://0.0.0.0:8090
+  #    KSQL_BOOTSTRAP_SERVERS: kafka:9092
+  #    KSQL_KSQL_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+
+  ## Access the cli by running:
+  ## > docker-compose exec ksqldb-cli  ksql http://primary-ksqldb-server:8088
+  #ksqldb-cli:
+  #  image: ${KSQL_IMAGE_BASE}confluentinc/ksqldb-cli:${KSQL_VERSION}
+  #  container_name: ksqldb-cli
+  #  depends_on:
+  #    - primary-ksqldb-server
+  #  entrypoint: /bin/sh
+  #  tty: true
+
+  # Access the cli by running:
+  # > docker-compose exec ksqldb-cli  ksql http://primary-ksqldb-server:8088
+  # ksql-setup:
+  #   image: ${KSQL_IMAGE_BASE}confluentinc/ksqldb-cli:${KSQL_VERSION}
+  #   container_name: ksql-setup
+  #   depends_on:
+  #     primary-ksqldb-server:
+  #       condition: service_healthy
+  #   #entrypoint: /bin/sh
+  #   tty: true
+  #   command: >
+  #     bash -c "echo Creating KSQL tables... && \
+  #              bash /bin/ksql --execute \"CREATE TABLE tenantDbMaster (tenantId VARCHAR PRIMARY KEY, dbMasterStatus VARCHAR) WITH (kafka_topic='tenantDbMaster', value_format='protobuf', partitions=1);\" -- http://primary-ksqldb-server:8088 && \
+  #              bash /bin/ksql --execute \"CREATE TABLE tenantDbCore (tenantId VARCHAR PRIMARY KEY, dbCoreStatus VARCHAR) WITH (kafka_topic='tenantDbCore', value_format='protobuf', partitions=1);\" -- http://primary-ksqldb-server:8088 && \
+  #              bash /bin/ksql --execute \"CREATE TABLE tenantDbWeb (tenantId VARCHAR PRIMARY KEY, dbWebStatus VARCHAR) WITH (kafka_topic='tenantDbWeb', value_format='protobuf', partitions=1);\" -- http://primary-ksqldb-server:8088 && \
+  #              bash /bin/ksql --execute \"CREATE TABLE tenantDbForms (tenantId VARCHAR PRIMARY KEY, dbFormsStatus VARCHAR) WITH (kafka_topic='tenantDbForms', value_format='protobuf', partitions=1);\" -- http://primary-ksqldb-server:8088 && \
+  #              bash /bin/ksql --execute \"CREATE TABLE tenantEnvironment AS SELECT m.tenantId, m.dbMasterStatus, c.dbCoreStatus, w.dbWebStatus, f.dbFormsStatus FROM tenantDbMaster m LEFT JOIN tenantDbCore c ON m.tenantId = c.tenantId LEFT JOIN tenantDbWeb w ON m.tenantId = w.tenantId LEFT JOIN tenantDbForms f ON m.tenantId = f.tenantId EMIT CHANGES;\" -- http://primary-ksqldb-server:8088"

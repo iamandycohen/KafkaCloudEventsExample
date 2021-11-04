@@ -1,0 +1,17 @@
+/nupkgs
+.vs
+bin/
+obj/
+.vs/
+.vscode/
+
+*.suo
+*.user
+.token-*
+.token.*
+launchSettings.json
+
+# ci/cd generated files
+version.txt
+testresults
+gitversion.txt
