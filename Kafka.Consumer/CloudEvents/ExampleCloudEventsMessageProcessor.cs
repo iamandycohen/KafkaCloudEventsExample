@@ -1,10 +1,10 @@
 ﻿using CloudNative.CloudEvents;
+using Kafka.Consumer;
 using Kafka.Consumer.Models;
 using Kafka.EventBus.CloudEvents;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Tenants.Options;
 
 namespace Kafka.Consumer.CloudEvents
 {
@@ -12,7 +12,8 @@ namespace Kafka.Consumer.CloudEvents
     {
         private readonly ILogger _logger;
 
-        public ExampleCloudEventsMessageProcessor(ICloudEventsPayloadTypeFactory cloudEventPayloadTypeFactory, ILogger<ExampleCloudEventsMessageProcessor> logger) : base(cloudEventPayloadTypeFactory, logger)
+        public ExampleCloudEventsMessageProcessor(ICloudEventsPayloadTypeFactory cloudEventPayloadTypeFactory, ILogger<ExampleCloudEventsMessageProcessor> logger) : 
+            base(cloudEventPayloadTypeFactory, logger)
         {
             _logger = logger;
         }

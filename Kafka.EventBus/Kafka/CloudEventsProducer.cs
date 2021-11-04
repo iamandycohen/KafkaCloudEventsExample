@@ -48,14 +48,19 @@ namespace Kafka.EventBus.Kafka
 
                 if (cloudEventPayoloadAttribute == null)
                 {
-                    throw new InvalidOperationException($"Event with ID '{@event.Id}' and key '{key}' must be decorated with a {nameof(CloudEventsPayloadAttribute)} to specify the type, dataschema and source properties of the CloudEvent object");
+                    throw new InvalidOperationException($"CloudEvent with ID '{@event.Id}' and key '{key}' must be decorated with a {nameof(CloudEventsPayloadAttribute)} to specify the type, dataschema and source properties of the CloudEvent object");
+                }
+
+                if (cloudEventPayoloadAttribute.Source == null)
+                {
+                    throw new InvalidOperationException($"CloudEvent with ID '{@event.Id}' and key '{key}' must specifiy the 'source' property on the {nameof(CloudEventsPayloadAttribute)}");
                 }
 
                 var cloudEvent = new CloudEvent
                 {
-                    Type = cloudEventPayoloadAttribute!.DataType,
-                    DataSchema = cloudEventPayoloadAttribute!.DataSchema,
-                    Source = new Uri("https://sitecore.com/xmcloud"),
+                    Type = cloudEventPayoloadAttribute.DataType,
+                    DataSchema = cloudEventPayoloadAttribute.DataSchema,
+                    Source = cloudEventPayoloadAttribute.Source,
                     Id = @event.Id,
                     Time = @event.Time,
                     Data = @event

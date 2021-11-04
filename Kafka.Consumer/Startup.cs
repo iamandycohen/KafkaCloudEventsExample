@@ -7,7 +7,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Kafka.EventBus.Extensions;
-using Tenants.Options;
 using Kafka.EventBus;
 using Kafka.Consumer.CloudEvents;
 using Kafka.EventBus.CloudEvents;

@@ -6,8 +6,7 @@ namespace Kafka.Consumer.Models
 {
     [CloudEventsPayload(
         dataType: "com.sitecore.xmclouddeploy.example.anothermessage",
-        dataSchema: "http://sitecore.com/xmclouddeploy/example/anothermessage.v1",
-        source: "http://sitecore.com/xmcloud/example")]
+        dataSchema: "http://sitecore.com/xmclouddeploy/example/anothermessage.v1")]
     public class AnotherMessage : IEvent
     {
         public string Id { get; set; } = "<default>";

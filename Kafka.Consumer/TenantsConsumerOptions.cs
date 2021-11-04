@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Tenants.Options
+namespace Kafka.Consumer
 {
     public class TenantsConsumerOptions : IKafkaConsumerOptions
     {
