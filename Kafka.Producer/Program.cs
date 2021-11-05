@@ -22,22 +22,25 @@ namespace Kafka.Producer
                 .CreateLogger<Program>();
 
             var tenantsProducer = serviceProvider.GetRequiredService<ICloudEventsProducer<TenantsProducerOptions>>();
-            var environmentMessage = new EnvironmentMessage
+
+            for (int i = 0; i < 20; i++)
             {
-                Id = Guid.NewGuid().ToString(),
-                Data = "This is a test!"
-            };
+                var environmentMessage = new EnvironmentMessage
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Data = "This is a test!"
+                };
 
-            await tenantsProducer.PublishAsync(environmentMessage, environmentMessage.Id);
+                await tenantsProducer.PublishAsync(environmentMessage, environmentMessage.Id);
 
-            var anotherMessage = new AnotherMessage
-            {
-                Id = Guid.NewGuid().ToString(),
-                AnotherOne = "This is another test!"
-            };
+                var anotherMessage = new AnotherMessage
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    AnotherOne = "This is another test!"
+                };
 
-            await tenantsProducer.PublishAsync(anotherMessage, anotherMessage.Id);
-
+                await tenantsProducer.PublishAsync(anotherMessage, anotherMessage.Id);
+            }
         }
     }
 }

@@ -1,8 +1,11 @@
 ﻿using CloudNative.CloudEvents;
 using CloudNative.CloudEvents.Extensions;
+using Confluent.Kafka;
 using Kafka.EventBus.Options;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -22,25 +25,32 @@ namespace Kafka.EventBus.CloudEvents
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task ProcessCloudEvent(CloudEvent cloudEvent)
+        public async Task ProcessBatch(IReadOnlyCollection<CloudEvent> cloudEventsBatch)
         {
-            // get event type
-            var cloudEventType = _cloudEventPayloadTypeFactory.ResolvePayloadType(cloudEvent);
+            var cloudEventsDataBatch = new List<ICloudEventData>();
 
-            if (cloudEventType == null)
+            foreach (var cloudEvent in cloudEventsBatch)
             {
-                _logger.LogWarning($"Unable to resolve CloudEvent payload of type '{cloudEvent.Type}' and schema '{cloudEvent.DataSchema}'. ID: '{cloudEvent.Id}' KEY: '{cloudEvent[Partitioning.PartitionKeyAttribute]}'.");
+                // get event type
+                var cloudEventType = _cloudEventPayloadTypeFactory.ResolvePayloadType(cloudEvent);
 
-                return;
+                if (cloudEventType == null)
+                {
+                    _logger.LogWarning($"Unable to resolve CloudEvent payload of type '{cloudEvent.Type}' and schema '{cloudEvent.DataSchema}'. ID: '{cloudEvent.Id}' KEY: '{cloudEvent[Partitioning.PartitionKeyAttribute]}'.");
+                } else
+                {
+                    // deserialize
+                    var json = ((JsonElement)cloudEvent.Data!).GetRawText();
+                    var eventPayload = JsonSerializer.Deserialize(json, cloudEventType);
+
+                    var cloudEventData = new CloudEventData(cloudEvent, eventPayload);
+                    cloudEventsDataBatch.Add(cloudEventData);
+                }
             }
 
-            // deserialize
-            var json = ((JsonElement)cloudEvent.Data!).GetRawText();
-            var eventPayload = JsonSerializer.Deserialize(json, cloudEventType);
-
-            await Process(eventPayload, cloudEvent).ConfigureAwait(false);
+            await ProcessBatch(cloudEventsDataBatch).ConfigureAwait(false);
         }
 
-        public abstract Task Process(object? @event, CloudEvent originalCloudEvent);
+        public abstract Task ProcessBatch(IReadOnlyCollection<ICloudEventData> cloudEventsDataBatch);
     }
 }

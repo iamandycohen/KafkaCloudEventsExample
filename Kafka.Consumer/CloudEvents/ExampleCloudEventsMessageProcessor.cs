@@ -3,6 +3,7 @@ using Kafka.Consumer;
 using Kafka.Consumer.Models;
 using Kafka.EventBus.CloudEvents;
 using Microsoft.Extensions.Logging;
+using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -18,18 +19,21 @@ namespace Kafka.Consumer.CloudEvents
             _logger = logger;
         }
 
-        public override async Task Process(object? @event, CloudEvent originalCloudEvent)
+        public override async Task ProcessBatch(IReadOnlyCollection<ICloudEventData> cloudEventsDataBatch)
         {
-            switch (@event)
+            foreach (var cloudEventData in cloudEventsDataBatch)
             {
-                case AnotherMessage anotherMessage:
-                    await HandleAnotherMessage(anotherMessage).ConfigureAwait(false);
-                    break;
-                case EnvironmentMessage environmentMessage:
-                    await HandleEnvironmentMessage(environmentMessage).ConfigureAwait(false);
-                    break;
-                default:
-                    break;
+                switch (cloudEventData.Event)
+                {
+                    case AnotherMessage anotherMessage:
+                        await HandleAnotherMessage(anotherMessage).ConfigureAwait(false);
+                        break;
+                    case EnvironmentMessage environmentMessage:
+                        await HandleEnvironmentMessage(environmentMessage).ConfigureAwait(false);
+                        break;
+                    default:
+                        break;
+                }
             }
         }
 

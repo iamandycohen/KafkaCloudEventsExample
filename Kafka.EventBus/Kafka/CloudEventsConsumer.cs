@@ -1,11 +1,15 @@
-﻿using CloudNative.CloudEvents.Kafka;
+﻿using CloudNative.CloudEvents;
+using CloudNative.CloudEvents.Kafka;
 using CloudNative.CloudEvents.SystemTextJson;
 using Confluent.Kafka;
 using Kafka.EventBus.CloudEvents;
+using Kafka.EventBus.Extensions;
 using Kafka.EventBus.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -35,7 +39,7 @@ namespace Kafka.EventBus.Kafka
 
         public async Task SubscribeAsync(CancellationToken cancellationToken)
         {
-            await Task.Run((Func<Task?>)(async () =>
+            await Task.Run(async () =>
             {
                 var consumer = ConsumerBuilder();
                 consumer.Subscribe(_consumerOptions.Topic);
@@ -44,13 +48,47 @@ namespace Kafka.EventBus.Kafka
                 {
                     try
                     {
-                        var consumerResult = consumer.Consume(cancellationToken);
-                        var cloudEvent = consumerResult.Message.ToCloudEvent(new JsonEventFormatter());
+                        var consumerBatch = consumer.ConsumeBatch(_consumerOptions.BatchWaitDuration, _consumerOptions.MaxBatchSize);
 
-                        await _cloudEventMessageProcessor.ProcessCloudEvent(cloudEvent).ConfigureAwait(false);
+                        var cloudEventsBatch = consumerBatch
+                            .Select(result => new
+                            {
+                                CloudEvent = result.Message.ToCloudEvent(new JsonEventFormatter()),
+                                Result = result
+                            });
 
-                        if (!_consumerOptions.AutoCommit)
-                            consumer.Commit(consumerResult);
+                        if (consumerBatch.Count > 0)
+                        {
+                            await _cloudEventMessageProcessor.ProcessBatch(cloudEventsBatch.Select(e => e.CloudEvent).ToList()).ConfigureAwait(false);
+                        }
+
+                        var lastConsumeResult = consumerBatch.LastOrDefault();
+                        if (lastConsumeResult != null)
+                        {
+                            if (_logger.IsEnabled(LogLevel.Debug))
+                            {
+                                var messages = string.Join(Environment.NewLine, cloudEventsBatch
+                                    .Select(evt =>
+                                    {
+                                        var eventType = evt.CloudEvent.Type;
+                                        var identifier = evt.CloudEvent.Id;
+
+                                        return $"\t{eventType} {identifier} (TPO: {evt.Result.TopicPartitionOffset})";
+                                    }));
+
+                                _logger.LogDebug($"{Environment.NewLine}{messages}");
+                            }
+                            
+                            // TODO: handle cases when exceptions occur
+                            // what do we do with the batch?
+                            // as well as reporting the errors in processing
+                            if (!_consumerOptions.AutoCommit)
+                            {
+                                _logger.LogInformation($"Committing batch of {consumerBatch.Count} events");
+
+                                consumer.Commit(lastConsumeResult);
+                            }
+                        }
                     }
                     catch (OperationCanceledException e)
                     {
@@ -69,7 +107,7 @@ namespace Kafka.EventBus.Kafka
                         break;
                     }
                 }
-            }), cancellationToken);
+            }, cancellationToken);
         }
 
         private IConsumer<string?, byte[]> ConsumerBuilder()

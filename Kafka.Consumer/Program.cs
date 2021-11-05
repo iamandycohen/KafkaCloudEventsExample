@@ -1,5 +1,9 @@
-﻿using Kafka.EventBus.CloudEvents;
+﻿using Kafka.Consumer.CloudEvents;
+using Kafka.EventBus.CloudEvents;
+using Kafka.EventBus.Extensions;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Threading;
@@ -9,35 +13,40 @@ namespace Kafka.Consumer
 {
     internal class Program
     {
-        private static ILogger<Program>? logger;
+        private static IConfiguration? _configuration;
 
         static async Task Main(string[] args)
         {
-            IServiceCollection services = new ServiceCollection();
+            await Host.CreateDefaultBuilder(args)
+                .ConfigureAppConfiguration(hostContext =>
+                {
+                    hostContext
+                        .AddJsonFile("appsettings.json")
+                        .AddJsonFile("appsettings.Development.json");
+                })
+                .ConfigureServices((hostContext, services) => 
+                {
+                    _configuration = hostContext.Configuration;
+                    services.AddHostedService<ExampleConsumerService>();
 
-            Startup startup = new();
-            startup.ConfigureServices(services);
-            IServiceProvider serviceProvider = services.BuildServiceProvider();
+                    services.AddMemoryCache();
+                    services.AddOptions();
+                    services.AddLogging(opt =>
+                    {
+                        opt.AddConsole();
+                    });
 
-            logger = serviceProvider.GetService<ILoggerFactory>()
-                .CreateLogger<Program>();
+                    // configure the default kafka connection options
+                    services.ConfigureKafkaConnectionOptions(_configuration);
 
-            var environmentConsumer = serviceProvider.GetRequiredService<ICloudEventsConsumer<TenantsConsumerOptions>>();
+                    // register the cloud events payload type factory
+                    services.RegisterCloudEvents();
 
-            var cts = new CancellationTokenSource();
-            Console.CancelKeyPress += (s, e) =>
-            {
-                Console.WriteLine("Canceling...");
-                cts.Cancel();
-                e.Cancel = true;
-            };
+                    // register topic consumer and message processor
+                    services.RegisterCloudEventConsumer<TenantsConsumerOptions, ExampleCloudEventsMessageProcessor>(_configuration, TenantsConsumerOptions.SectionName);
 
-            await DoWork(environmentConsumer, cts.Token);
-        }
-
-        static async Task DoWork(ICloudEventsConsumer<TenantsConsumerOptions> consumer, CancellationToken cancellationToken)
-        {
-            await consumer.SubscribeAsync(cancellationToken);
+                })
+                .RunConsoleAsync();
         }
 
     }

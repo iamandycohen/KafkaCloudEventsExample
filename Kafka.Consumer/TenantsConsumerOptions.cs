@@ -15,5 +15,7 @@ namespace Kafka.Consumer
         public string GroupId { get; set; } = string.Empty;
         public bool AutoCommit { get; set; }
         public bool AllowAutoCreateTopics { get; set; }
+        public int MaxBatchSize { get; set; }
+        public TimeSpan BatchWaitDuration { get; set; }
     }
 }
