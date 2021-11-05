@@ -56,9 +56,19 @@ namespace Kafka.EventBus.Extensions
         public static IServiceCollection RegisterCloudEventProducer<TProducerOptions>(this IServiceCollection services, IConfiguration configuration, string sectionName)
             where TProducerOptions : class, IKafkaProducerOptions
         {
+            services = RegisterCloudEventProducer<TProducerOptions, CloudEventsMappingStrategy<TProducerOptions>>(services, configuration, sectionName);
+
+            return services;
+        }
+
+        public static IServiceCollection RegisterCloudEventProducer<TProducerOptions, TMappingStrategy>(this IServiceCollection services, IConfiguration configuration, string sectionName)
+            where TProducerOptions : class, IKafkaProducerOptions
+            where TMappingStrategy : class, ICloudEventsMappingStrategy<TProducerOptions>
+        {
             services = ConfigureKafkaProducerOptions<TProducerOptions>(services, configuration, sectionName);
 
             services.AddSingleton<ICloudEventsProducer<TProducerOptions>, CloudEventsProducer<TProducerOptions>>();
+            services.AddSingleton<ICloudEventsMappingStrategy<TProducerOptions>, TMappingStrategy>();
 
             return services;
         }

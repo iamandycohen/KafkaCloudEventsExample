@@ -16,10 +16,11 @@ namespace Kafka.EventBus.Kafka
     public class CloudEventsProducer<TProducerOptions> : ICloudEventsProducer<TProducerOptions>, IDisposable 
         where TProducerOptions : class, IKafkaProducerOptions
     {
-        readonly ILogger _logger;
+        private readonly ILogger _logger;
         private readonly IMemoryCache _memorycache;
-        readonly KafkaConnectionOptions _connectionOptions;
-        readonly IKafkaProducerOptions _producerOptions;
+        private readonly KafkaConnectionOptions _connectionOptions;
+        private readonly IKafkaProducerOptions _producerOptions;
+        private readonly ICloudEventsMappingStrategy<TProducerOptions> _cloudEventsMappingStrategy;
 
         private IProducer<string?, byte[]>? _producer;
         private bool disposedValue;
@@ -30,11 +31,13 @@ namespace Kafka.EventBus.Kafka
         public CloudEventsProducer(
             IOptions<KafkaConnectionOptions> connectionOptions,
             IOptions<TProducerOptions> producerOptions,
+            ICloudEventsMappingStrategy<TProducerOptions> cloudEventsMappingStrategy,
             IMemoryCache memorycache,
             ILogger<CloudEventsProducer<TProducerOptions>> logger)
         {
             _connectionOptions = connectionOptions == null ? throw new ArgumentNullException(nameof(connectionOptions)) : connectionOptions.Value ?? throw new ArgumentNullException(nameof(connectionOptions));
             _producerOptions = producerOptions == null ? throw new ArgumentNullException(nameof(producerOptions)) : producerOptions.Value ?? throw new ArgumentNullException(nameof(producerOptions));
+            _cloudEventsMappingStrategy = cloudEventsMappingStrategy ?? throw new ArgumentNullException(nameof(cloudEventsMappingStrategy));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _memorycache = memorycache ?? throw new ArgumentNullException(nameof(memorycache));
         }
@@ -43,35 +46,7 @@ namespace Kafka.EventBus.Kafka
         {
             try
             {
-                // get the attributes
-                var cloudEventPayoloadAttribute = (CloudEventsPayloadAttribute?) (Attribute.GetCustomAttribute(@event.GetType(), typeof(CloudEventsPayloadAttribute)));
-
-                if (cloudEventPayoloadAttribute == null)
-                {
-                    throw new InvalidOperationException($"CloudEvent with ID '{@event.Id}' and key '{key}' must be decorated with a {nameof(CloudEventsPayloadAttribute)} to specify the type, dataschema and source properties of the CloudEvent object");
-                }
-
-                if (cloudEventPayoloadAttribute.Source == null)
-                {
-                    throw new InvalidOperationException($"CloudEvent with ID '{@event.Id}' and key '{key}' must specifiy the 'source' property on the {nameof(CloudEventsPayloadAttribute)}");
-                }
-
-                var cloudEvent = new CloudEvent
-                {
-                    Type = cloudEventPayoloadAttribute.DataType,
-                    DataSchema = cloudEventPayoloadAttribute.DataSchema,
-                    Source = cloudEventPayoloadAttribute.Source,
-                    Id = @event.Id,
-                    Time = @event.Time,
-                    Data = @event
-                };
-
-                if (key != null)
-                {
-                    cloudEvent[Partitioning.PartitionKeyAttribute] = key;
-                }
-
-                var message = cloudEvent.ToKafkaMessage(ContentMode.Binary, new JsonEventFormatter());
+                var message = await _cloudEventsMappingStrategy.Map(@event, key);
 
                 await Producer.ProduceAsync(_producerOptions.Topic, message);
             }
